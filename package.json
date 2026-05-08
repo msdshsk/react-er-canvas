@@ -1,0 +1,92 @@
+{
+  "name": "@msdshsk/react-er-canvas",
+  "version": "0.0.1",
+  "description": "Render Mermaid-format ER diagrams in React/Electron with extended visual features (PK/FK icons, schema groups, FK reference highlighting, manual JOINs, drag-to-position).",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.js",
+      "require": "./dist/core.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "README.ja.md",
+    "LICENSE",
+    "NOTICE.md"
+  ],
+  "author": "msdsh <msd.shsk@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/msdshsk/react-er-canvas.git"
+  },
+  "bugs": {
+    "url": "https://github.com/msdshsk/react-er-canvas/issues"
+  },
+  "homepage": "https://github.com/msdshsk/react-er-canvas#readme",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "workspaces": [
+    "examples/*"
+  ],
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview",
+    "example": "npm run dev -w examples/web",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "peerDependencies": {
+    "@xyflow/react": ">=12 <13",
+    "react": "^18.2.0 || ^19.0.0",
+    "react-dom": "^18.2.0 || ^19.0.0"
+  },
+  "dependencies": {
+    "chevrotain": "^12.0.0",
+    "elkjs": "^0.11.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/coverage-v8": "^4.1.5",
+    "@xyflow/react": "^12.10.2",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.11",
+    "vite-plugin-dts": "^5.0.0",
+    "vitest": "^4.1.5"
+  },
+  "keywords": [
+    "mermaid",
+    "er-diagram",
+    "entity-relationship",
+    "react",
+    "electron",
+    "react-flow",
+    "elkjs",
+    "database",
+    "schema",
+    "query-builder"
+  ],
+  "sideEffects": false
+}

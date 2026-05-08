@@ -1,0 +1,170 @@
+erDiagram
+  %% @group catalog
+  brands {
+    bigint_unsigned id PK
+    varchar255 name UK
+    text description
+    timestamp created_at
+    timestamp updated_at
+  }
+  categories {
+    bigint_unsigned id PK
+    varchar255 name
+    bigint_unsigned parent_id FK
+    int_unsigned sort_order
+    timestamp created_at
+    timestamp updated_at
+  }
+  products {
+    bigint_unsigned id PK
+    varchar255 sku UK
+    varchar255 name
+    text description
+    decimal price
+    int_unsigned stock_quantity
+    bigint_unsigned brand_id FK
+    enumdraft_active_archived status
+    timestamp created_at
+    timestamp updated_at
+    timestamp deleted_at
+  }
+  product_categories {
+    bigint_unsigned product_id PK,FK
+    bigint_unsigned category_id PK,FK
+    timestamp created_at
+  }
+  product_media {
+    bigint_unsigned product_id PK,FK
+    bigint_unsigned media_id PK,FK
+    int_unsigned sort_order
+  }
+  %% @endgroup
+
+  %% @group sales
+  customers {
+    bigint_unsigned id PK
+    varchar255 email UK
+    varchar255 display_name
+    varchar20 phone
+    timestamp created_at
+    timestamp updated_at
+  }
+  customer_addresses {
+    bigint_unsigned id PK
+    bigint_unsigned customer_id FK
+    varchar255 line1
+    varchar255 line2
+    varchar100 city
+    varchar2 country_code
+    varchar20 postal_code
+    timestamp created_at
+    timestamp updated_at
+  }
+  orders {
+    bigint_unsigned id PK
+    bigint_unsigned customer_id FK
+    bigint_unsigned billing_address_id FK
+    bigint_unsigned shipping_address_id FK
+    varchar3 currency
+    decimal total_amount
+    enumpending_paid_shipped_delivered_cancelled status
+    timestamp ordered_at
+    timestamp updated_at
+  }
+  order_items {
+    bigint_unsigned id PK
+    bigint_unsigned order_id FK
+    bigint_unsigned product_id FK
+    int_unsigned quantity
+    decimal unit_price
+  }
+  shipments {
+    bigint_unsigned id PK
+    bigint_unsigned order_id FK
+    varchar50 carrier
+    varchar100 tracking_number
+    timestamp shipped_at
+    timestamp delivered_at
+  }
+  coupons {
+    bigint_unsigned id PK
+    varchar50 code UK
+    decimal discount_amount
+    timestamp valid_from
+    timestamp valid_until
+  }
+  order_coupons {
+    bigint_unsigned order_id PK,FK
+    bigint_unsigned coupon_id PK,FK
+    decimal applied_amount
+  }
+  %% @endgroup
+
+  %% @group content
+  authors {
+    bigint_unsigned id PK
+    varchar255 display_name
+    text bio
+    timestamp created_at
+  }
+  blog_posts {
+    bigint_unsigned id PK
+    bigint_unsigned author_id FK
+    varchar255 title
+    text content
+    enumdraft_published_archived status
+    timestamp published_at
+    timestamp created_at
+    timestamp updated_at
+  }
+  comments {
+    bigint_unsigned id PK
+    bigint_unsigned blog_post_id FK
+    bigint_unsigned author_id FK
+    bigint_unsigned parent_id FK
+    bigint_unsigned reply_to_author_id FK
+    text body
+    timestamp created_at
+    timestamp updated_at
+  }
+  tags {
+    bigint_unsigned id PK
+    varchar50 slug UK
+    varchar100 display_name
+  }
+  blog_post_tags {
+    bigint_unsigned blog_post_id PK,FK
+    bigint_unsigned tag_id PK,FK
+  }
+  %% @endgroup
+
+  media {
+    bigint_unsigned id PK
+    varchar255 file_path
+    varchar50 mime_type
+    bigint_unsigned size_bytes
+    timestamp created_at
+  }
+
+  categories ||--o{ categories : "categories_parent_id_foreign"
+  brands ||--o{ products : "products_brand_id_foreign"
+  products ||--o{ product_categories : "product_categories_product_id_foreign"
+  categories ||--o{ product_categories : "product_categories_category_id_foreign"
+  products ||--o{ product_media : "product_media_product_id_foreign"
+  media ||--o{ product_media : "product_media_media_id_foreign"
+  customers ||--o{ customer_addresses : "customer_addresses_customer_id_foreign"
+  customers ||--o{ orders : "orders_customer_id_foreign"
+  customer_addresses ||--o{ orders : "orders_billing_address_id_foreign"
+  customer_addresses ||--o{ orders : "orders_shipping_address_id_foreign"
+  orders ||--o{ order_items : "order_items_order_id_foreign"
+  products ||--o{ order_items : "order_items_product_id_foreign"
+  orders ||--o{ shipments : "shipments_order_id_foreign"
+  orders ||--o{ order_coupons : "order_coupons_order_id_foreign"
+  coupons ||--o{ order_coupons : "order_coupons_coupon_id_foreign"
+  authors ||--o{ blog_posts : "blog_posts_author_id_foreign"
+  blog_posts ||--o{ comments : "comments_blog_post_id_foreign"
+  authors ||--o{ comments : "comments_author_id_foreign"
+  authors ||--o{ comments : "comments_reply_to_author_id_foreign"
+  comments ||--o{ comments : "comments_parent_id_foreign"
+  blog_posts ||--o{ blog_post_tags : "blog_post_tags_blog_post_id_foreign"
+  tags ||--o{ blog_post_tags : "blog_post_tags_tag_id_foreign"
