@@ -8,3 +8,9 @@ dist/
 .vscode/
 *.tsbuildinfo
 coverage/
+
+# Never commit auth credentials
+.npmrc
+.env
+.env.*
+!.env.example
