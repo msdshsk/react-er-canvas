@@ -1,4 +1,4 @@
-import { Fragment, createContext, memo, useContext } from 'react';
+import { Fragment, createContext, memo, useContext, useEffect, useMemo, useRef } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import type { Column, Table } from '../core/model';
@@ -17,15 +17,20 @@ export const HighlightContext = createContext<ReadonlyMap<string, ReadonlySet<st
 
 export interface ColumnSelectionContextValue {
   enabled: boolean;
+  /** When true, render a per-table select-all checkbox in each header. */
+  showSelectAll: boolean;
   /** "table.column" keys for fast lookup. */
   selected: ReadonlySet<string>;
   onToggle: (table: string, column: string, checked: boolean) => void;
+  onToggleAll: (table: string, columns: string[], nextState: boolean) => void;
 }
 
 export const ColumnSelectionContext = createContext<ColumnSelectionContextValue>({
   enabled: false,
+  showSelectAll: false,
   selected: new Set(),
   onToggle: () => undefined,
+  onToggleAll: () => undefined,
 });
 
 /** When true, column handles become visible/connectable for manual JOIN drawing. */
@@ -33,7 +38,7 @@ export const ConnectModeContext = createContext<boolean>(false);
 
 export interface TableActionsContextValue {
   /** When provided, a delete affordance is shown on the table header. */
-  onTableRemove?: (table: string) => void;
+  onTableRemove?: (table: string, meta?: unknown) => void;
   /** Per-column click handler. Provided via context (not node data) so its
    *  identity can change without invalidating the React Flow node array. */
   onColumnClick?: (table: string, column: string) => void;
@@ -160,6 +165,31 @@ export const TableNode = memo(function TableNode({ data }: NodeProps) {
   const highlightedCols = highlightMap.get(table.name);
   const headerBg = table.group ? '#1e40af' : '#374151';
 
+  const showSelectAllCheckbox =
+    selection.enabled && selection.showSelectAll && table.columns.length > 0;
+  const allColumnNames = useMemo(
+    () => table.columns.map((c) => c.name),
+    [table.columns],
+  );
+  const selectedCountInTable = useMemo(() => {
+    if (!showSelectAllCheckbox) return 0;
+    let n = 0;
+    for (const c of allColumnNames) {
+      if (selection.selected.has(`${table.name}.${c}`)) n++;
+    }
+    return n;
+  }, [showSelectAllCheckbox, allColumnNames, selection.selected, table.name]);
+  const allSelected =
+    showSelectAllCheckbox && selectedCountInTable === allColumnNames.length;
+  const someSelected =
+    showSelectAllCheckbox &&
+    selectedCountInTable > 0 &&
+    selectedCountInTable < allColumnNames.length;
+  const selectAllRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someSelected;
+  }, [someSelected]);
+
   const handleStyle = (extra: { top?: number }): React.CSSProperties => ({
     ...extra,
     width: connectMode ? 9 : 6,
@@ -217,8 +247,52 @@ export const TableNode = memo(function TableNode({ data }: NodeProps) {
           borderTopRightRadius: 6,
         }}
       >
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {table.name}
+        <span
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            overflow: 'hidden',
+            minWidth: 0,
+          }}
+        >
+          {showSelectAllCheckbox && (
+            <input
+              ref={selectAllRef}
+              type="checkbox"
+              className="nodrag"
+              checked={allSelected}
+              onChange={(e) =>
+                selection.onToggleAll(table.name, allColumnNames, e.target.checked)
+              }
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              title={
+                allSelected
+                  ? 'Deselect all columns'
+                  : someSelected
+                    ? 'Some columns selected — click to select all'
+                    : 'Select all columns'
+              }
+              style={{
+                width: 13,
+                height: 13,
+                margin: 0,
+                flexShrink: 0,
+                cursor: 'pointer',
+                accentColor: '#3b82f6',
+              }}
+            />
+          )}
+          <span
+            style={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {table.name}
+          </span>
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           {table.group && (
@@ -240,7 +314,7 @@ export const TableNode = memo(function TableNode({ data }: NodeProps) {
               className="nodrag"
               onClick={(e) => {
                 e.stopPropagation();
-                tableActions.onTableRemove?.(table.name);
+                tableActions.onTableRemove?.(table.name, table.meta);
               }}
               onMouseDown={(e) => e.stopPropagation()}
               title="Remove this table"

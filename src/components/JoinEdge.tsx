@@ -10,6 +10,10 @@ import type { JoinType } from '../core/model';
 export interface JoinEdgeData extends Record<string, unknown> {
   type: JoinType;
   color: string;
+  /** Optional override for the edge stroke width. Defaults to 2 / 2.5 (when emphasized). */
+  strokeWidth?: number;
+  /** Optional override for the edge dasharray. Defaults to '6 3' (dashed). Pass '' for solid. */
+  strokeDasharray?: string;
   hovered?: boolean;
   onDelete?: () => void;
 }
@@ -45,8 +49,8 @@ export const JoinEdge = memo(function JoinEdge({
         path={edgePath}
         style={{
           stroke: color,
-          strokeWidth: emphasized ? 2.5 : 2,
-          strokeDasharray: '6 3',
+          strokeWidth: d.strokeWidth ?? (emphasized ? 2.5 : 2),
+          strokeDasharray: d.strokeDasharray ?? '6 3',
         }}
       />
       <EdgeLabelRenderer>

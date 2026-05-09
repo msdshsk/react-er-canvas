@@ -118,13 +118,42 @@ export interface MermaidERProps {
    * `column` may be undefined when the drag landed on a default (table-center) handle.
    */
   onJoinConnect?: (source: PartialColumnRef, target: PartialColumnRef) => void;
-  /** Fired when the user removes a manual join via Delete or the trash icon. */
-  onJoinDelete?: (joinId: string) => void;
-  /** When provided, a small × appears on each table header to remove it from the canvas. */
-  onTableRemove?: (table: string) => void;
+  /**
+   * Fired when the user removes a manual join via Delete or the trash icon.
+   * `meta` is the opaque value attached to `Join.meta` (if any), provided so
+   * the consumer can map the joinId back to its own domain object directly.
+   */
+  onJoinDelete?: (joinId: string, meta?: unknown) => void;
+  /**
+   * Fired when the user clicks an existing manual join edge. Use this to open
+   * an in-app edit dialog (change join type / pivot columns) without forcing
+   * the user to delete-and-recreate the connection.
+   */
+  onJoinClick?: (joinId: string, meta?: unknown) => void;
+  /**
+   * Per-edge style override for manual joins. Returning `undefined` (or
+   * omitting fields) keeps the default style. Useful e.g. to color
+   * auto-detected vs user-drawn joins differently.
+   */
+  joinStyle?: (
+    join: Join,
+  ) =>
+    | { stroke?: string; strokeWidth?: number; strokeDasharray?: string }
+    | undefined;
+  /**
+   * When provided, a small × appears on each table header to remove it.
+   * `meta` mirrors `Table.meta` so the consumer can resolve to its own node id.
+   */
+  onTableRemove?: (table: string, meta?: unknown) => void;
   highlightReferencesOnHover?: boolean;
   onColumnClick?: (table: string, column: string) => void;
-  onTableClick?: (table: string) => void;
+  onTableClick?: (table: string, meta?: unknown) => void;
+  /**
+   * When `showColumnCheckboxes` is enabled, also render a per-table
+   * select-all checkbox in the header (with indeterminate state for partial
+   * selection). Toggles all of that table's columns at once.
+   */
+  showSelectAllPerTable?: boolean;
   /** Override the default delete-key code(s). Default is 'Delete' (Backspace ignored to prevent accidents). */
   deleteKeyCode?: string | string[] | null;
   className?: string;
@@ -221,9 +250,12 @@ export const MermaidER = forwardRef<MermaidERHandle, MermaidERProps>(function Me
     joins,
     onJoinConnect,
     onJoinDelete,
+    onJoinClick,
+    joinStyle,
     onTableRemove,
     onColumnClick,
     onTableClick,
+    showSelectAllPerTable,
     deleteKeyCode = 'Delete',
     className,
     style,
@@ -353,13 +385,43 @@ export const MermaidER = forwardRef<MermaidERHandle, MermaidERProps>(function Me
     [selectedColumns, onColumnSelectionChange],
   );
 
+  const handleSelectAllToggle = useCallback(
+    (table: string, columns: string[], nextState: boolean) => {
+      if (!onColumnSelectionChange) return;
+      const list = selectedColumns ?? [];
+      if (nextState) {
+        const existing = new Set(list.map(refKey));
+        const additions: ColumnRef[] = [];
+        for (const c of columns) {
+          if (!existing.has(`${table}.${c}`)) additions.push({ table, column: c });
+        }
+        if (additions.length === 0) return;
+        onColumnSelectionChange([...list, ...additions]);
+      } else {
+        const drop = new Set(columns);
+        onColumnSelectionChange(
+          list.filter((r) => !(r.table === table && drop.has(r.column))),
+        );
+      }
+    },
+    [selectedColumns, onColumnSelectionChange],
+  );
+
   const selectionContext = useMemo<ColumnSelectionContextValue>(
     () => ({
       enabled: showColumnCheckboxes ?? false,
+      showSelectAll: showSelectAllPerTable ?? false,
       selected: selectionSet,
       onToggle: handleColumnSelectToggle,
+      onToggleAll: handleSelectAllToggle,
     }),
-    [showColumnCheckboxes, selectionSet, handleColumnSelectToggle],
+    [
+      showColumnCheckboxes,
+      showSelectAllPerTable,
+      selectionSet,
+      handleColumnSelectToggle,
+      handleSelectAllToggle,
+    ],
   );
 
   const edges = useMemo<Edge[]>(() => {
@@ -399,12 +461,15 @@ export const MermaidER = forwardRef<MermaidERHandle, MermaidERProps>(function Me
       if (!tableSet.has(j.source.table) || !tableSet.has(j.target.table)) continue;
       const edgeId = `${JOIN_EDGE_PREFIX}${j.id}`;
       const isHovered = edgeId === hoveredEdgeId;
-      const color = JOIN_TYPE_COLOR[j.type] ?? '#3b82f6';
+      const styleOverride = joinStyle?.(j);
+      const color = styleOverride?.stroke ?? JOIN_TYPE_COLOR[j.type] ?? '#3b82f6';
       const data: JoinEdgeData = {
         type: j.type,
         color,
+        strokeWidth: styleOverride?.strokeWidth,
+        strokeDasharray: styleOverride?.strokeDasharray,
         hovered: isHovered,
-        onDelete: onJoinDelete ? () => onJoinDelete(j.id) : undefined,
+        onDelete: onJoinDelete ? () => onJoinDelete(j.id, j.meta) : undefined,
       };
       joinEdges.push({
         id: edgeId,
@@ -419,7 +484,7 @@ export const MermaidER = forwardRef<MermaidERHandle, MermaidERProps>(function Me
     }
 
     return [...fkEdges, ...joinEdges];
-  }, [layout, model, joins, hoveredEdgeId, onJoinDelete]);
+  }, [layout, model, joins, hoveredEdgeId, onJoinDelete, joinStyle]);
 
   const handleConnect = useCallback(
     (conn: Connection) => {
@@ -437,12 +502,24 @@ export const MermaidER = forwardRef<MermaidERHandle, MermaidERProps>(function Me
     (deleted: Edge[]) => {
       if (!onJoinDelete) return;
       for (const e of deleted) {
-        if (e.id.startsWith(JOIN_EDGE_PREFIX)) {
-          onJoinDelete(e.id.slice(JOIN_EDGE_PREFIX.length));
-        }
+        if (!e.id.startsWith(JOIN_EDGE_PREFIX)) continue;
+        const joinId = e.id.slice(JOIN_EDGE_PREFIX.length);
+        const join = joins?.find((j) => j.id === joinId);
+        onJoinDelete(joinId, join?.meta);
       }
     },
-    [onJoinDelete],
+    [onJoinDelete, joins],
+  );
+
+  const handleEdgeClick = useCallback(
+    (_: unknown, edge: Edge) => {
+      if (!onJoinClick) return;
+      if (!edge.id.startsWith(JOIN_EDGE_PREFIX)) return;
+      const joinId = edge.id.slice(JOIN_EDGE_PREFIX.length);
+      const join = joins?.find((j) => j.id === joinId);
+      onJoinClick(joinId, join?.meta);
+    },
+    [onJoinClick, joins],
   );
 
   const connectModeOn = !!enableManualJoins;
@@ -508,10 +585,16 @@ export const MermaidER = forwardRef<MermaidERHandle, MermaidERProps>(function Me
                 onNodesChange={onNodesChange}
                 onNodeDragStop={handleNodeDragStop}
                 onNodeClick={
-                  onTableClick ? (_, node) => onTableClick(node.id) : undefined
+                  onTableClick
+                    ? (_, node) => {
+                        const meta = (node.data as TableNodeData | undefined)?.table?.meta;
+                        onTableClick(node.id, meta);
+                      }
+                    : undefined
                 }
                 onEdgeMouseEnter={(_, edge) => setHoveredEdgeId(edge.id)}
                 onEdgeMouseLeave={() => setHoveredEdgeId(null)}
+                onEdgeClick={onJoinClick ? handleEdgeClick : undefined}
                 onConnect={handleConnect}
                 onEdgesDelete={handleEdgesDelete}
                 nodesDraggable
