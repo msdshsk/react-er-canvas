@@ -1,6 +1,6 @@
 {
   "name": "@msdshsk/react-er-canvas",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Render Mermaid-format ER diagrams in React/Electron with extended visual features (PK/FK icons, schema groups, FK reference highlighting, manual JOINs, drag-to-position).",
   "type": "module",
   "main": "./dist/index.cjs",

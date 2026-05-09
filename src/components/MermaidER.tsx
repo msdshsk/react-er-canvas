@@ -1,9 +1,13 @@
 import {
+  forwardRef,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
+  type Ref,
 } from 'react';
 import {
   ReactFlow,
@@ -11,11 +15,15 @@ import {
   Controls,
   MiniMap,
   useNodesState,
+  useReactFlow,
   type Connection,
   type Edge,
   type EdgeTypes,
+  type FitViewOptions,
   type Node,
   type NodeTypes,
+  type Rect,
+  type Viewport,
 } from '@xyflow/react';
 // React Flow's CSS is intentionally NOT imported here. Consumers must add it
 // once at their app entry point: `import '@xyflow/react/dist/style.css';`.
@@ -61,6 +69,30 @@ export interface NodePosition {
 }
 
 export type NodePositions = Record<string, NodePosition>;
+
+/**
+ * Imperative API exposed via `ref`. Designed to give consumers the primitives
+ * needed for image export (fit → snapshot → restore) without baking any
+ * specific export library into this package. Methods that change the viewport
+ * return Promise<boolean> matching React Flow's underlying API.
+ */
+export interface MermaidERHandle {
+  /** Fit all nodes into the visible viewport. */
+  fitView: (options?: FitViewOptions) => Promise<boolean>;
+  /** Read the current viewport (x, y, zoom) — capture before export to restore later. */
+  getViewport: () => Viewport;
+  /** Restore (or set) viewport. */
+  setViewport: (viewport: Viewport) => Promise<boolean>;
+  /** Bounding box of all current nodes. Useful for sizing offscreen canvases. */
+  getNodesBounds: () => Rect;
+  /** Outer wrapper element (the div that receives `className` / `style`). */
+  getWrapperElement: () => HTMLDivElement | null;
+  /**
+   * The internal `.react-flow__viewport` element. Typical snapshot target
+   * when you want to exclude `<Controls>` and `<MiniMap>` from the image.
+   */
+  getViewportElement: () => HTMLElement | null;
+}
 
 export interface MermaidERProps {
   /** Mermaid ER source. Mutually exclusive with `model`. */
@@ -140,7 +172,40 @@ const JOIN_TYPE_COLOR: Record<Join['type'], string> = {
   CROSS: '#6b7280',
 };
 
-export function MermaidER(props: MermaidERProps) {
+/**
+ * Bridge: `useReactFlow()` only works inside the <ReactFlow> provider, but the
+ * imperative ref must be attached to MermaidER (which is the *parent* of
+ * <ReactFlow>). This null-rendering child runs the hook in the right scope and
+ * forwards the methods back out.
+ */
+function HandleBridge({
+  apiRef,
+  wrapperRef,
+}: {
+  apiRef: Ref<MermaidERHandle> | undefined;
+  wrapperRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  const rf = useReactFlow();
+  useImperativeHandle(
+    apiRef,
+    () => ({
+      fitView: (options) => rf.fitView(options),
+      getViewport: () => rf.getViewport(),
+      setViewport: (viewport) => rf.setViewport(viewport),
+      getNodesBounds: () => rf.getNodesBounds(rf.getNodes()),
+      getWrapperElement: () => wrapperRef.current,
+      getViewportElement: () =>
+        wrapperRef.current?.querySelector<HTMLElement>('.react-flow__viewport') ?? null,
+    }),
+    [rf, wrapperRef],
+  );
+  return null;
+}
+
+export const MermaidER = forwardRef<MermaidERHandle, MermaidERProps>(function MermaidER(
+  props,
+  ref,
+) {
   const {
     source,
     model: modelProp,
@@ -386,8 +451,11 @@ export function MermaidER(props: MermaidERProps) {
     [onTableRemove, onColumnClick],
   );
 
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
   return (
     <div
+      ref={wrapperRef}
       className={className}
       style={{ width: '100%', height: '100%', position: 'relative', ...style }}
     >
@@ -456,6 +524,7 @@ export function MermaidER(props: MermaidERProps) {
                 <Background />
                 <Controls />
                 <MiniMap pannable zoomable />
+                <HandleBridge apiRef={ref} wrapperRef={wrapperRef} />
               </ReactFlow>
             </TableActionsContext.Provider>
           </ConnectModeContext.Provider>
@@ -463,4 +532,4 @@ export function MermaidER(props: MermaidERProps) {
       </HighlightContext.Provider>
     </div>
   );
-}
+});

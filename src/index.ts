@@ -1,5 +1,6 @@
 export { MermaidER } from './components/MermaidER';
 export type {
+  MermaidERHandle,
   MermaidERProps,
   NodePosition,
   NodePositions,
